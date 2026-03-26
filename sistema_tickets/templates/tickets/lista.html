@@ -1,0 +1,171 @@
+<!-- ============================================================
+     templates/tickets/lista.html
+     Listado de tickets — datos cargados desde Supabase
+     Autor: Equipo 1º DAM | Proyecto: Sistema de Tickets 1º DAM
+     ============================================================ -->
+{% extends "base.html" %}
+
+{% block title %}Mis Tickets{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <h1>📋 Listado de Tickets</h1>
+        <a href="/tickets/nuevo" class="btn btn-primary">➕ Nuevo Ticket</a>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filters-card">
+        <form id="filters-form" class="filters-form">
+            <div class="filter-group">
+                <label for="filter-status">Estado</label>
+                <select id="filter-status">
+                    <option value="">Todos</option>
+                    <option value="open">🔵 Abierto</option>
+                    <option value="in_progress">🟠 En progreso</option>
+                    <option value="resolved">🟢 Resuelto</option>
+                    <option value="closed">⚪ Cerrado</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="filter-category">Categoría</label>
+                <select id="filter-category">
+                    <option value="">Todas</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-secondary" id="filter-btn">🔍 Filtrar</button>
+        </form>
+    </div>
+
+    <!-- Tabla de tickets (se rellena con JS) -->
+    <div id="tickets-container">
+        <div class="empty-state">
+            <div class="empty-icon">⏳</div>
+            <h2>Cargando tickets...</h2>
+        </div>
+    </div>
+
+    <!-- Paginación -->
+    <div id="pagination-container" class="pagination" style="display:none;"></div>
+    <p id="results-info" class="results-info" style="display:none;"></p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let paginaActual = 1;
+
+    /**
+     * Carga y renderiza la lista de tickets desde Supabase.
+     * Aplica filtros de estado y categoría, y gestiona la paginación.
+     */
+    async function cargarTickets() {
+        const status = document.getElementById('filter-status').value;
+        const categoryId = document.getElementById('filter-category').value;
+
+        const resultado = await listarTickets({
+            status: status || undefined,
+            categoryId: categoryId ? parseInt(categoryId) : undefined,
+            page: paginaActual,
+            pageSize: 10
+        });
+
+        const container = document.getElementById('tickets-container');
+
+        if (!resultado.tickets || resultado.tickets.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">📭</div>
+                    <h2>No hay tickets</h2>
+                    <p>No se encontraron tickets con los filtros seleccionados.</p>
+                    <a href="/tickets/nuevo" class="btn btn-primary">Crear primer ticket</a>
+                </div>`;
+            document.getElementById('pagination-container').style.display = 'none';
+            document.getElementById('results-info').style.display = 'none';
+            return;
+        }
+
+        // Construir tabla HTML
+        let html = '<div class="tickets-table-wrapper"><table class="tickets-table">';
+        html += '<thead><tr><th>ID</th><th>Título</th><th>Categoría</th>';
+        html += '<th>Prioridad</th><th>Estado</th><th>Autor</th><th>Fecha</th></tr></thead><tbody>';
+
+        resultado.tickets.forEach(function (t) {
+            html += '<tr class="ticket-row" onclick="window.location=\'/tickets/' + t.id + '\'">';
+            html += '<td class="ticket-id">#' + t.id + '</td>';
+            html += '<td class="ticket-title">' + escapeHtml(t.title) + '</td>';
+            html += '<td><span class="badge badge-category">' +
+                escapeHtml(t.category ? t.category.name : '') + '</span></td>';
+            html += '<td><span class="badge badge-priority badge-priority-' + t.priority + '">' +
+                escapeHtml(t.priority) + '</span></td>';
+            html += '<td><span class="badge badge-status badge-status-' + t.status + '">' +
+                traducirEstado(t.status) + '</span></td>';
+            html += '<td>' + escapeHtml(t.author ? t.author.name : '') + '</td>';
+            html += '<td class="ticket-date">' + formatearFecha(t.created_at) + '</td>';
+            html += '</tr>';
+        });
+
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+
+        // Paginación
+        if (resultado.pages > 1) {
+            let pagHtml = '';
+            if (paginaActual > 1) {
+                pagHtml += '<a href="#" class="pagination-link" onclick="irPagina(' +
+                    (paginaActual - 1) + ')">&laquo; Anterior</a>';
+            }
+            for (let p = 1; p <= resultado.pages; p++) {
+                pagHtml += '<a href="#" class="pagination-link ' +
+                    (p === paginaActual ? 'active' : '') +
+                    '" onclick="irPagina(' + p + ')">' + p + '</a>';
+            }
+            if (paginaActual < resultado.pages) {
+                pagHtml += '<a href="#" class="pagination-link" onclick="irPagina(' +
+                    (paginaActual + 1) + ')">Siguiente &raquo;</a>';
+            }
+            document.getElementById('pagination-container').innerHTML = pagHtml;
+            document.getElementById('pagination-container').style.display = 'flex';
+        } else {
+            document.getElementById('pagination-container').style.display = 'none';
+        }
+
+        document.getElementById('results-info').textContent =
+            'Página ' + resultado.page + ' de ' + resultado.pages +
+            ' (' + resultado.total + ' tickets)';
+        document.getElementById('results-info').style.display = 'block';
+    }
+
+    /** Navega a una página específica. */
+    function irPagina(p) {
+        paginaActual = p;
+        cargarTickets();
+    }
+
+    /** Carga las categorías en el filtro. */
+    async function cargarFiltros() {
+        const categorias = await listarCategorias();
+        const select = document.getElementById('filter-category');
+        categorias.forEach(function (c) {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.name.charAt(0).toUpperCase() + c.name.slice(1);
+            select.appendChild(opt);
+        });
+    }
+
+    // Evento de filtrado
+    document.getElementById('filters-form').addEventListener('submit', function (e) {
+        e.preventDefault();
+        paginaActual = 1;
+        cargarTickets();
+    });
+
+    // Inicialización de la página
+    (async function () {
+        await requiereAuth();
+        await cargarFiltros();
+        await cargarTickets();
+    })();
+</script>
+{% endblock %}

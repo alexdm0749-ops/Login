@@ -1,0 +1,72 @@
+<!-- ============================================================
+     templates/admin/usuarios.html
+     Gestión de usuarios — datos desde Supabase
+     Autor: Equipo 1º DAM | Proyecto: Sistema de Tickets 1º DAM
+     ============================================================ -->
+{% extends "base.html" %}
+
+{% block title %}Gestión de Usuarios{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <h1>👥 Gestión de Usuarios</h1>
+        <a href="/admin/dashboard" class="btn btn-secondary">← Dashboard</a>
+    </div>
+
+    <!-- Tabla de usuarios (se rellena con JS) -->
+    <div id="users-container">
+        <div class="empty-state">
+            <div class="empty-icon">⏳</div>
+            <h2>Cargando usuarios...</h2>
+        </div>
+    </div>
+
+    <p id="users-info" class="results-info" style="display:none;"></p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    /**
+     * Carga y renderiza la lista de usuarios desde Supabase.
+     */
+    async function cargarUsuarios() {
+        const usuarios = await listarUsuarios();
+
+        if (usuarios.length === 0) {
+            document.getElementById('users-container').innerHTML =
+                '<div class="empty-state"><h2>No hay usuarios</h2></div>';
+            return;
+        }
+
+        let html = '<div class="tickets-table-wrapper"><table class="tickets-table">';
+        html += '<thead><tr><th>Nombre</th><th>Email</th><th>Rol</th>';
+        html += '<th>Registrado</th></tr></thead><tbody>';
+
+        usuarios.forEach(function (u) {
+            html += '<tr>';
+            html += '<td><strong>' + escapeHtml(u.name) + '</strong></td>';
+            html += '<td>' + escapeHtml(u.email) + '</td>';
+            html += '<td><span class="badge badge-role badge-' + u.role + '">' +
+                u.role + '</span></td>';
+            html += '<td>' + formatearFecha(u.created_at) + '</td>';
+            html += '</tr>';
+        });
+
+        html += '</tbody></table></div>';
+        document.getElementById('users-container').innerHTML = html;
+
+        document.getElementById('users-info').textContent =
+            'Total: ' + usuarios.length + ' usuarios registrados';
+        document.getElementById('users-info').style.display = 'block';
+    }
+
+    // Inicialización: solo admins
+    (async function () {
+        const ok = await requiereRol('admin');
+        if (!ok) return;
+        await cargarUsuarios();
+    })();
+</script>
+{% endblock %}

@@ -1,0 +1,130 @@
+<!-- ============================================================
+     templates/tickets/nuevo.html
+     Formulario nuevo ticket — envía a Supabase directamente
+     Autor: Equipo 1º DAM | Proyecto: Sistema de Tickets 1º DAM
+     ============================================================ -->
+{% extends "base.html" %}
+
+{% block title %}Nuevo Ticket{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <a href="/tickets" class="btn btn-back">← Volver al listado</a>
+
+    <div class="form-card">
+        <h1>📝 Crear Nuevo Ticket</h1>
+
+        <form id="nuevo-ticket-form" class="ticket-form">
+            <div class="form-group">
+                <label for="title">📌 Título</label>
+                <input type="text" id="title" placeholder="Describe brevemente el problema o sugerencia" required
+                    minlength="5" maxlength="200">
+                <span class="form-hint">Mínimo 5 caracteres, máximo 200</span>
+            </div>
+
+            <div class="form-group">
+                <label for="body">📝 Descripción</label>
+                <textarea id="body" rows="6"
+                    placeholder="Detalla el problema, pasos para reproducir, resultado esperado..." required
+                    maxlength="5000"></textarea>
+                <span class="form-hint">Máximo 5000 caracteres</span>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="category_id">📁 Categoría</label>
+                    <select id="category_id" required>
+                        <option value="">Selecciona una categoría</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="priority">⚡ Prioridad</label>
+                    <select id="priority" required>
+                        <option value="baja">🟢 Baja</option>
+                        <option value="media" selected>🟡 Media</option>
+                        <option value="alta">🟠 Alta</option>
+                        <option value="critica">🔴 Crítica</option>
+                    </select>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block" id="create-ticket-btn">
+                🚀 Crear Ticket
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    /** Carga las categorías desde Supabase en el select. */
+    async function cargarCategorias() {
+        const categorias = await listarCategorias();
+        const select = document.getElementById('category_id');
+        categorias.forEach(function (c) {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.name.charAt(0).toUpperCase() + c.name.slice(1);
+            select.appendChild(opt);
+        });
+    }
+
+    /**
+     * Maneja el envío del formulario de nuevo ticket.
+     * Valida campos según OWASP y crea el ticket en Supabase.
+     */
+    document.getElementById('nuevo-ticket-form').addEventListener('submit', async function (e) {
+        e.preventDefault();
+
+        const title = document.getElementById('title').value.trim();
+        const body = document.getElementById('body').value.trim();
+        const categoryId = document.getElementById('category_id').value;
+        const priority = document.getElementById('priority').value;
+
+        // Validaciones OWASP
+        if (title.length < 5) {
+            mostrarFlash('El título debe tener al menos 5 caracteres', 'error');
+            return;
+        }
+        if (title.length > 200) {
+            mostrarFlash('El título no puede superar los 200 caracteres', 'error');
+            return;
+        }
+        if (!body) {
+            mostrarFlash('La descripción es obligatoria', 'error');
+            return;
+        }
+        if (body.length > 5000) {
+            mostrarFlash('La descripción no puede superar los 5000 caracteres', 'error');
+            return;
+        }
+        if (!categoryId) {
+            mostrarFlash('Selecciona una categoría', 'error');
+            return;
+        }
+
+        const btn = document.getElementById('create-ticket-btn');
+        btn.disabled = true;
+        btn.textContent = 'Creando...';
+
+        const resultado = await crearTicket(title, parseInt(categoryId), body, priority);
+
+        if (resultado.error) {
+            mostrarFlash('Error al crear el ticket: ' + resultado.error, 'error');
+            btn.disabled = false;
+            btn.textContent = '🚀 Crear Ticket';
+            return;
+        }
+
+        window.location.href = '/tickets/' + resultado.data.id;
+    });
+
+    // Inicialización
+    (async function () {
+        await requiereAuth();
+        await cargarCategorias();
+    })();
+</script>
+{% endblock %}

@@ -1,0 +1,159 @@
+<!-- ============================================================
+     templates/admin/dashboard.html
+     Panel de admin — estadísticas desde Supabase RPC
+     Autor: Equipo 1º DAM | Proyecto: Sistema de Tickets 1º DAM
+     ============================================================ -->
+{% extends "base.html" %}
+
+{% block title %}Dashboard Admin{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <h1>📊 Panel de Administración</h1>
+        <p class="welcome-message" id="welcome-msg"></p>
+    </div>
+
+    <!-- Tarjetas de estadísticas -->
+    <div id="stats-grid" class="stats-grid">
+        <div class="stat-card stat-primary">
+            <div class="stat-icon">🎫</div>
+            <div class="stat-info">
+                <span class="stat-number" id="stat-tickets">-</span>
+                <span class="stat-label">Total Tickets</span>
+            </div>
+        </div>
+        <div class="stat-card stat-info-color">
+            <div class="stat-icon">👥</div>
+            <div class="stat-info">
+                <span class="stat-number" id="stat-users">-</span>
+                <span class="stat-label">Usuarios</span>
+            </div>
+        </div>
+        <div class="stat-card stat-success">
+            <div class="stat-icon">💬</div>
+            <div class="stat-info">
+                <span class="stat-number" id="stat-comments">-</span>
+                <span class="stat-label">Comentarios</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tickets por estado -->
+    <div class="dashboard-section">
+        <h2>📈 Tickets por Estado</h2>
+        <div id="status-bars" class="status-bars"></div>
+    </div>
+
+    <!-- Tickets por categoría -->
+    <div class="dashboard-section">
+        <h2>📁 Tickets por Categoría</h2>
+        <div id="category-grid" class="category-grid"></div>
+    </div>
+
+    <!-- Gestión de categorías -->
+    <div class="dashboard-section">
+        <h2>⚙️ Gestión de Categorías</h2>
+        <div class="categories-management">
+            <div id="categories-list" class="categories-list"></div>
+            <form id="add-category-form" class="add-category-form">
+                <input type="text" id="new-category-name" placeholder="Nueva categoría..." minlength="2" maxlength="50"
+                    required>
+                <button type="submit" class="btn btn-primary" id="add-category-btn">Añadir</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    /**
+     * Carga las estadísticas desde la función RPC de Supabase.
+     */
+    async function cargarStats() {
+        const stats = await obtenerEstadisticas();
+        if (!stats) {
+            mostrarFlash('Error al cargar estadísticas', 'error');
+            return;
+        }
+
+        // Tarjetas
+        document.getElementById('stat-tickets').textContent = stats.total_tickets || 0;
+        document.getElementById('stat-users').textContent = stats.total_usuarios || 0;
+        document.getElementById('stat-comments').textContent = stats.total_comentarios || 0;
+
+        // Barras de estado
+        const total = stats.total_tickets || 1;
+        const estados = stats.tickets_por_estado || {};
+        const statusNames = {
+            'open': '🔵 Abiertos', 'in_progress': '🟠 En progreso',
+            'resolved': '🟢 Resueltos', 'closed': '⚪ Cerrados'
+        };
+
+        let barsHtml = '';
+        ['open', 'in_progress', 'resolved', 'closed'].forEach(function (s) {
+            const count = estados[s] || 0;
+            const pct = Math.round((count / total) * 100);
+            barsHtml += '<div class="status-bar-item">';
+            barsHtml += '<span class="status-label">' + statusNames[s] + '</span>';
+            barsHtml += '<div class="status-bar"><div class="status-bar-fill status-fill-' +
+                s + '" style="width:' + pct + '%"></div></div>';
+            barsHtml += '<span class="status-count">' + count + '</span>';
+            barsHtml += '</div>';
+        });
+        document.getElementById('status-bars').innerHTML = barsHtml;
+
+        // Categorías
+        const cats = stats.tickets_por_categoria || {};
+        let catHtml = '';
+        Object.keys(cats).forEach(function (name) {
+            catHtml += '<div class="category-card">';
+            catHtml += '<span class="category-name">' + escapeHtml(name) + '</span>';
+            catHtml += '<span class="category-count">' + cats[name] + '</span>';
+            catHtml += '</div>';
+        });
+        document.getElementById('category-grid').innerHTML = catHtml || '<p>Sin categorías</p>';
+    }
+
+    /** Carga la lista de categorías existentes. */
+    async function cargarCategorias() {
+        const cats = await listarCategorias();
+        let html = '';
+        cats.forEach(function (c) {
+            html += '<span class="badge badge-category">' +
+                escapeHtml(c.name) + '</span>';
+        });
+        document.getElementById('categories-list').innerHTML = html;
+    }
+
+    // Crear nueva categoría
+    document.getElementById('add-category-form').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const name = document.getElementById('new-category-name').value.trim().toLowerCase();
+        if (!name) return;
+
+        const res = await crearCategoria(name);
+        if (res.error) { mostrarFlash('Error: ' + res.error, 'error'); return; }
+
+        document.getElementById('new-category-name').value = '';
+        mostrarFlash('Categoría creada', 'success');
+        await cargarCategorias();
+        await cargarStats();
+    });
+
+    // Inicialización
+    (async function () {
+        const ok = await requiereRol('admin');
+        if (!ok) return;
+
+        document.getElementById('welcome-msg').innerHTML =
+            'Bienvenido/a, <strong>' + escapeHtml(currentProfile.name) +
+            '</strong> <span class="badge badge-role badge-admin">' +
+            currentProfile.role + '</span>';
+
+        await cargarStats();
+        await cargarCategorias();
+    })();
+</script>
+{% endblock %}

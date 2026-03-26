@@ -1,0 +1,83 @@
+<!-- ============================================================
+     templates/auth/login.html
+     Página de inicio de sesión — usa Supabase Auth
+     Autor: Equipo 1º DAM | Proyecto: Sistema de Tickets 1º DAM
+     ============================================================ -->
+{% extends "base.html" %}
+
+{% block title %}Iniciar Sesión{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-header">
+            <h1>🎫 Sistema de Tickets</h1>
+            <p>Inicia sesión para gestionar tus incidencias</p>
+        </div>
+
+        <form id="login-form" class="auth-form">
+            <div class="form-group">
+                <label for="email">📧 Email</label>
+                <input type="email" id="email" placeholder="tu@email.com" required maxlength="200" autocomplete="email">
+            </div>
+
+            <div class="form-group">
+                <label for="password">🔒 Contraseña</label>
+                <input type="password" id="password" placeholder="Tu contraseña" required minlength="6" maxlength="200"
+                    autocomplete="current-password">
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block" id="login-btn">
+                Iniciar Sesión
+            </button>
+        </form>
+
+        <div class="auth-footer">
+            <p>¿No tienes cuenta?
+                <a href="/registro">Regístrate aquí</a>
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Si ya está logueado, redirigir a tickets
+    (async function () {
+        const user = await obtenerUsuarioActual();
+        if (user) window.location.href = '/tickets';
+    })();
+
+    /**
+     * Maneja el envío del formulario de login.
+     * Llama a Supabase Auth para autenticar y redirige si éxito.
+     */
+    document.getElementById('login-form').addEventListener('submit', async function (e) {
+        e.preventDefault();
+
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+
+        if (!email || !password) {
+            mostrarFlash('Email y contraseña son obligatorios', 'error');
+            return;
+        }
+
+        const btn = document.getElementById('login-btn');
+        btn.disabled = true;
+        btn.textContent = 'Iniciando sesión...';
+
+        const resultado = await loginUsuario(email, password);
+
+        if (resultado.error) {
+            mostrarFlash('Credenciales incorrectas', 'error');
+            btn.disabled = false;
+            btn.textContent = 'Iniciar Sesión';
+            return;
+        }
+
+        window.location.href = '/tickets';
+    });
+</script>
+{% endblock %}

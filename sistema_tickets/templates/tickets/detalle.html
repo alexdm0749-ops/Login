@@ -1,0 +1,197 @@
+<!-- ============================================================
+     templates/tickets/detalle.html
+     Detalle de ticket + comentarios — datos desde Supabase
+     Autor: Equipo 1º DAM | Proyecto: Sistema de Tickets 1º DAM
+     ============================================================ -->
+{% extends "base.html" %}
+
+{% block title %}Ticket #{{ ticket_id }}{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <a href="/tickets" class="btn btn-back">← Volver al listado</a>
+
+    <!-- Detalle del ticket (se rellena con JS) -->
+    <div id="ticket-detail">
+        <div class="empty-state">
+            <div class="empty-icon">⏳</div>
+            <h2>Cargando ticket...</h2>
+        </div>
+    </div>
+
+    <!-- Comentarios -->
+    <div id="comments-section" style="display:none;">
+        <h2>💬 Comentarios (<span id="comment-count">0</span>)</h2>
+        <div id="comments-list"></div>
+
+        <div class="comment-form-card">
+            <h3>✏️ Añadir Comentario</h3>
+            <form id="comment-form" class="comment-form">
+                <div class="form-group">
+                    <textarea id="comment-body" rows="4" placeholder="Escribe tu comentario..." required
+                        maxlength="5000"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary" id="comment-submit-btn">
+                    Enviar Comentario
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const TICKET_ID = {{ ticket_id }};
+
+    /**
+     * Carga y renderiza el detalle del ticket desde Supabase.
+     */
+    async function cargarTicket() {
+        const ticket = await obtenerTicket(TICKET_ID);
+
+        if (!ticket) {
+            document.getElementById('ticket-detail').innerHTML =
+                '<div class="empty-state"><h2>Ticket no encontrado</h2></div>';
+            return;
+        }
+
+        let html = '<div class="ticket-detail-card">';
+        html += '<div class="ticket-detail-header">';
+        html += '<h1><span class="ticket-id-large">#' + ticket.id + '</span> ' +
+            escapeHtml(ticket.title) + '</h1>';
+        html += '<div class="ticket-badges">';
+        html += '<span class="badge badge-status badge-status-' + ticket.status + '">' +
+            traducirEstado(ticket.status) + '</span>';
+        html += '<span class="badge badge-priority badge-priority-' + ticket.priority + '">' +
+            escapeHtml(ticket.priority) + '</span>';
+        html += '<span class="badge badge-category">' +
+            escapeHtml(ticket.category ? ticket.category.name : '') + '</span>';
+        html += '</div></div>';
+
+        html += '<div class="ticket-detail-body"><p>' + escapeHtml(ticket.body) + '</p></div>';
+
+        html += '<div class="ticket-detail-meta">';
+        html += '<div class="meta-item"><strong>👤 Autor:</strong> ' +
+            escapeHtml(ticket.author ? ticket.author.name : '') + '</div>';
+        html += '<div class="meta-item"><strong>📅 Creado:</strong> ' +
+            formatearFecha(ticket.created_at) + '</div>';
+        html += '<div class="meta-item"><strong>🔄 Actualizado:</strong> ' +
+            formatearFecha(ticket.updated_at) + '</div>';
+        html += '<div class="meta-item"><strong>🛠️ Asignado a:</strong> ' +
+            (ticket.assignee ? escapeHtml(ticket.assignee.name) : 'Sin asignar') + '</div>';
+        html += '</div>';
+
+        // Acciones para agente/admin
+        if (currentProfile && (currentProfile.role === 'agente' || currentProfile.role === 'admin')) {
+            html += '<div class="ticket-actions"><h3>⚡ Acciones</h3>';
+            html += '<div class="action-buttons">';
+
+            if (ticket.status === 'open') {
+                html += '<button class="btn btn-warning" onclick="cambiarEstado(\'in_progress\')">' +
+                    '🟠 Marcar En Progreso</button>';
+            } else if (ticket.status === 'in_progress') {
+                html += '<button class="btn btn-success" onclick="cambiarEstado(\'resolved\')">' +
+                    '🟢 Marcar Resuelto</button>';
+            } else if (ticket.status === 'resolved') {
+                html += '<button class="btn btn-secondary" onclick="cambiarEstado(\'closed\')">' +
+                    '⚪ Cerrar Ticket</button>';
+            }
+
+            if (!ticket.assignee_id) {
+                html += '<button class="btn btn-primary" onclick="asignarme()">' +
+                    '🙋 Asignármelo</button>';
+            }
+
+            html += '</div>';
+
+            if (currentProfile.role === 'admin') {
+                html += '<button class="btn btn-danger" onclick="borrarTicket()">' +
+                    '🗑️ Eliminar Ticket</button>';
+            }
+
+            html += '</div>';
+        }
+
+        html += '</div>';
+        document.getElementById('ticket-detail').innerHTML = html;
+
+        // Cargar comentarios
+        await cargarComentarios();
+        document.getElementById('comments-section').style.display = 'block';
+    }
+
+    /**
+     * Carga y renderiza los comentarios del ticket.
+     */
+    async function cargarComentarios() {
+        const comentarios = await listarComentarios(TICKET_ID);
+        document.getElementById('comment-count').textContent = comentarios.length;
+
+        if (comentarios.length === 0) {
+            document.getElementById('comments-list').innerHTML =
+                '<p class="no-comments">No hay comentarios todavía.</p>';
+            return;
+        }
+
+        let html = '<div class="comments-list">';
+        comentarios.forEach(function (c) {
+            html += '<div class="comment-card">';
+            html += '<div class="comment-header">';
+            html += '<strong>' + escapeHtml(c.author ? c.author.name : 'Usuario') + '</strong>';
+            html += '<span class="comment-date">' + formatearFecha(c.created_at) + '</span>';
+            html += '</div>';
+            html += '<div class="comment-body"><p>' + escapeHtml(c.body) + '</p></div>';
+            html += '</div>';
+        });
+        html += '</div>';
+
+        document.getElementById('comments-list').innerHTML = html;
+    }
+
+    /** Cambia el estado del ticket. */
+    async function cambiarEstado(nuevoEstado) {
+        const res = await actualizarTicket(TICKET_ID, { status: nuevoEstado });
+        if (res.error) { mostrarFlash('Error: ' + res.error, 'error'); return; }
+        mostrarFlash('Estado actualizado', 'success');
+        await cargarTicket();
+    }
+
+    /** Asigna el ticket al usuario actual. */
+    async function asignarme() {
+        const res = await actualizarTicket(TICKET_ID, { assignee_id: currentUser.id });
+        if (res.error) { mostrarFlash('Error: ' + res.error, 'error'); return; }
+        mostrarFlash('Ticket asignado', 'success');
+        await cargarTicket();
+    }
+
+    /** Elimina el ticket (solo admin). */
+    async function borrarTicket() {
+        if (!confirm('¿Seguro que quieres eliminar este ticket?')) return;
+        const res = await eliminarTicket(TICKET_ID);
+        if (res.error) { mostrarFlash('Error: ' + res.error, 'error'); return; }
+        window.location.href = '/tickets';
+    }
+
+    // Enviar comentario
+    document.getElementById('comment-form').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const body = document.getElementById('comment-body').value.trim();
+        if (!body) { mostrarFlash('El comentario no puede estar vacío', 'error'); return; }
+        if (body.length > 5000) { mostrarFlash('Máximo 5000 caracteres', 'error'); return; }
+
+        const res = await crearComentario(TICKET_ID, body);
+        if (res.error) { mostrarFlash('Error: ' + res.error, 'error'); return; }
+
+        document.getElementById('comment-body').value = '';
+        mostrarFlash('Comentario añadido', 'success');
+        await cargarComentarios();
+    });
+
+    // Inicialización
+    (async function () {
+        await requiereAuth();
+        await cargarTicket();
+    })();
+</script>
+{% endblock %}
