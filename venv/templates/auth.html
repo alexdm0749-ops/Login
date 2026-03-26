@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registrar Cuenta</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 400px; margin: auto; }
+        input { display: block; width: 100%; margin: 10px 0; padding: 8px; }
+        button { padding: 10px; background: #007bff; color: white; border: none; width: 100%; }
+        .error { color: red; }
+        .success { color: green; }
+        .switch { text-align: center; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Registra tu cuenta</h2>
+       
+            <form method="POST">
+                <input type="text" name="nombre" placeholder="Nombre" required>
+                <input type="email" name="email" placeholder="Email" required>
+                <input type="password" name="password" placeholder="Contraseña" required>
+                <input type="password" name="confirmar" placeholder="Confirmar Contraseña" required>
+                <button type="submit">Crear Cuenta</button>
+            </form>
+            <div class="switch">
+                <p>¿Ya tienes cuenta? <a href="{{ url_for('login') }}">Inicia sesión aquí</a></p>
+            </div>
+       
+    </div>
+</body>
+</html>
